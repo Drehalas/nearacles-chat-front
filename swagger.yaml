@@ -1,0 +1,468 @@
+openapi: 3.0.3
+info:
+  title: Nearacles Evaluation API
+  description: |
+    API for evaluating questions and managing blockchain-based evaluations.
+    This API provides endpoints for submitting questions, retrieving evaluations,
+    and managing the evaluation lifecycle with blockchain integration.
+  version: 1.0.0
+  contact:
+    name: Nearacles Team
+    email: support@nearacles.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.nearacles.com
+    description: Production server
+
+paths:
+  /api/evaluate:
+    post:
+      summary: Submit a question for evaluation
+      description: |
+        Submits a question for blockchain-based evaluation. The system will
+        process the question, generate sources, and return an evaluation result
+        with blockchain transaction details.
+      operationId: evaluateQuestion
+      tags:
+        - Evaluation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationRequest'
+            examples:
+              simple_question:
+                summary: Simple yes/no question
+                value:
+                  question: "Is the sky blue?"
+              complex_question:
+                summary: Complex evaluation question
+                value:
+                  question: "Will renewable energy adoption increase by 50% in the next 5 years?"
+      responses:
+        '200':
+          description: Evaluation completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponse'
+              examples:
+                successful_evaluation:
+                  summary: Successful evaluation response
+                  value:
+                    question: "Is the sky blue?"
+                    sources:
+                      - title: "Atmospheric Science Basics"
+                        url: "https://example.com/atmospheric-science"
+                      - title: "Light Scattering in Earth's Atmosphere"
+                        url: "https://example.com/light-scattering"
+                    answer: true
+                    hash: "0x1a2b3c4d5e6f7890abcdef1234567890"
+                    status: "evaluated"
+                    tx_hash: "0xabcdef1234567890fedcba0987654321"
+                    explorer_url: "https://explorer.near.org/transactions/0xabcdef1234567890fedcba0987654321"
+        '400':
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_question:
+                  summary: Missing question field
+                  value:
+                    error: "Question is required"
+                    code: "MISSING_QUESTION"
+                    timestamp: "2024-01-15T10:30:00Z"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                server_error:
+                  summary: Internal server error
+                  value:
+                    error: "Internal server error occurred"
+                    code: "INTERNAL_ERROR"
+                    timestamp: "2024-01-15T10:30:00Z"
+
+  /api/evaluations/{id}:
+    get:
+      summary: Get evaluation by ID
+      description: Retrieves a specific evaluation with its associated question and sources
+      operationId: getEvaluationById
+      tags:
+        - Evaluation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The evaluation ID
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          example: 123
+      responses:
+        '200':
+          description: Evaluation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationWithSources'
+        '404':
+          description: Evaluation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/questions:
+    get:
+      summary: List all questions
+      description: Retrieves a paginated list of all questions
+      operationId: listQuestions
+      tags:
+        - Questions
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of questions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  questions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/QuestionEntity'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationInfo'
+
+components:
+  schemas:
+    EvaluationRequest:
+      type: object
+      required:
+        - question
+      properties:
+        question:
+          type: string
+          description: The question to be evaluated
+          minLength: 1
+          maxLength: 1000
+          example: "Will Bitcoin reach $100,000 by the end of 2024?"
+      additionalProperties: false
+
+    Source:
+      type: object
+      required:
+        - title
+        - url
+      properties:
+        title:
+          type: string
+          description: Title of the source
+          minLength: 1
+          maxLength: 200
+          example: "Cryptocurrency Market Analysis"
+        url:
+          type: string
+          format: uri
+          description: URL of the source
+          example: "https://example.com/crypto-analysis"
+      additionalProperties: false
+
+    EvaluationResponse:
+      type: object
+      required:
+        - question
+        - sources
+        - answer
+        - hash
+        - status
+        - tx_hash
+        - explorer_url
+      properties:
+        question:
+          type: string
+          description: The original question that was evaluated
+          example: "Will Bitcoin reach $100,000 by the end of 2024?"
+        sources:
+          type: array
+          description: Array of sources used for evaluation
+          items:
+            $ref: '#/components/schemas/Source'
+          minItems: 0
+          maxItems: 10
+        answer:
+          type: boolean
+          description: The evaluation result (true/false)
+          example: true
+        hash:
+          type: string
+          description: Hash of the evaluation
+          pattern: '^0x[a-fA-F0-9]{32}$'
+          example: "0x1a2b3c4d5e6f7890abcdef1234567890"
+        status:
+          type: string
+          enum: ["pending", "evaluated", "failed"]
+          description: Current status of the evaluation
+          example: "evaluated"
+        tx_hash:
+          type: string
+          description: Blockchain transaction hash
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          example: "0xabcdef1234567890fedcba0987654321abcdef1234567890fedcba0987654321"
+        explorer_url:
+          type: string
+          format: uri
+          description: URL to view the transaction on blockchain explorer
+          example: "https://explorer.near.org/transactions/0xabcdef1234567890fedcba0987654321"
+      additionalProperties: false
+
+    QuestionEntity:
+      type: object
+      required:
+        - id
+        - question_text
+        - question_hash
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier for the question
+          example: 123
+        question_text:
+          type: string
+          description: The text of the question
+          minLength: 1
+          maxLength: 1000
+          example: "Will Bitcoin reach $100,000 by the end of 2024?"
+        question_hash:
+          type: string
+          description: Hash of the question text
+          pattern: '^0x[a-fA-F0-9]{32}$'
+          example: "0x1a2b3c4d5e6f7890abcdef1234567890"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the question was created
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the question was last updated
+          example: "2024-01-15T10:30:00Z"
+      additionalProperties: false
+
+    EvaluationEntity:
+      type: object
+      required:
+        - id
+        - question_id
+        - answer
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier for the evaluation
+          example: 456
+        question_id:
+          type: integer
+          format: int64
+          description: ID of the associated question
+          example: 123
+        answer:
+          type: boolean
+          description: The evaluation result
+          example: true
+        status:
+          type: string
+          enum: ["pending", "evaluated", "failed"]
+          description: Current status of the evaluation
+          example: "evaluated"
+        tx_hash:
+          type: string
+          nullable: true
+          description: Blockchain transaction hash (optional)
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          example: "0xabcdef1234567890fedcba0987654321abcdef1234567890fedcba0987654321"
+        explorer_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to view the transaction on blockchain explorer (optional)
+          example: "https://explorer.near.org/transactions/0xabcdef1234567890fedcba0987654321"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the evaluation was created
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the evaluation was last updated
+          example: "2024-01-15T10:30:00Z"
+      additionalProperties: false
+
+    SourceEntity:
+      type: object
+      required:
+        - id
+        - evaluation_id
+        - title
+        - url
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier for the source
+          example: 789
+        evaluation_id:
+          type: integer
+          format: int64
+          description: ID of the associated evaluation
+          example: 456
+        title:
+          type: string
+          description: Title of the source
+          minLength: 1
+          maxLength: 200
+          example: "Cryptocurrency Market Analysis"
+        url:
+          type: string
+          format: uri
+          description: URL of the source
+          example: "https://example.com/crypto-analysis"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the source was created
+          example: "2024-01-15T10:30:00Z"
+      additionalProperties: false
+
+    EvaluationWithSources:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/EvaluationEntity'
+        - type: object
+          required:
+            - question
+            - sources
+          properties:
+            question:
+              $ref: '#/components/schemas/QuestionEntity'
+            sources:
+              type: array
+              items:
+                $ref: '#/components/schemas/SourceEntity'
+              description: Array of sources associated with this evaluation
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - code
+        - timestamp
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Question is required"
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "MISSING_QUESTION"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when the error occurred
+          example: "2024-01-15T10:30:00Z"
+        details:
+          type: object
+          description: Additional error details (optional)
+          additionalProperties: true
+      additionalProperties: false
+
+    PaginationInfo:
+      type: object
+      required:
+        - page
+        - limit
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          description: Current page number
+          minimum: 1
+          example: 1
+        limit:
+          type: integer
+          description: Number of items per page
+          minimum: 1
+          example: 20
+        total:
+          type: integer
+          description: Total number of items
+          minimum: 0
+          example: 150
+        totalPages:
+          type: integer
+          description: Total number of pages
+          minimum: 0
+          example: 8
+      additionalProperties: false
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+
+tags:
+  - name: Evaluation
+    description: Operations related to question evaluation
+  - name: Questions
+    description: Operations related to question management
