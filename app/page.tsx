@@ -47,7 +47,7 @@ export default function EvaluationChat() {
 
     try {
       const response = await fetch(
-        "https://cc4c7002039f2264befef097a6cb27efb171135d-3000.dstack-prod5.phala.network/api/evaluate",
+        "https://db276d49f0eb0377440edc0ca01ec35bb891d665-3000.dstack-prod5.phala.network/api/evaluate",
         {
           method: "POST",
           headers: {
